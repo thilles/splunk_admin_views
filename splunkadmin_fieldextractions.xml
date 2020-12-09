@@ -1,0 +1,135 @@
+<form>
+  <label>Field extractions</label>
+  <search id="baseSearch">
+    <query>| rest /services/data/props/extractions splunk_server=local 
+      | search eai:acl.app="$s_app2$" eai:acl.app="*$s_app$*" eai:acl.owner="$s_owner$" stanza="$s_stanza$" value="*$s_value$*" type="$s_type$" eai:acl.sharing="*$s_sharing$*" title="*$s_extractionname$*"
+      | table eai:acl.app stanza title value type eai:acl.owner eai:acl.perms.read, eai:acl.perms.write eai:acl.sharing  
+      | rename eai:acl.app as "Splunk app", title as "Field extraction name", eai:acl.perms.read as "Read perm", eai:acl.perms.write as "Write perm", eai:acl.sharing as "Sharing", eai:acl.owner as Owner, type as Type, stanza as Stanza, value as Value
+      | sort splunkApp</query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+  </search>
+  <fieldset autoRun="true" submitButton="false">
+    <input type="dropdown" token="s_app2" searchWhenChanged="true">
+      <label>Choose Splunk apps:</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <change>
+        <condition>
+          <unset token="form.s_title"></unset>
+          <unset token="show_panel"></unset>
+          <unset token="form.s_app"></unset>
+        </condition>
+      </change>
+      <fieldForLabel>eai:acl.app</fieldForLabel>
+      <fieldForValue>eai:acl.app</fieldForValue>
+      <search>
+        <query>| rest /services/data/props/extractions splunk_server=local | table eai:acl.app | dedup eai:acl.app | sort eai:acl.app</query>
+      </search>
+    </input>
+    <input type="dropdown" token="s_type" searchWhenChanged="true">
+      <label>Filter on type:</label>
+      <choice value="*">All</choice>
+      <choice value="Uses transform">Uses transform</choice>
+      <choice value="Inline">Inline</choice>
+      <default>*</default>
+    </input>
+    <input type="dropdown" token="s_sharing" searchWhenChanged="true">
+      <label>Filter on sharing:</label>
+      <choice value="*">All</choice>
+      <choice value="global">global</choice>
+      <choice value="system">system</choice>
+      <choice value="app">app</choice>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_app" searchWhenChanged="true">
+      <label>Search for app:</label>
+      <default>*</default>
+      <change>
+        <condition>
+          <unset token="form.s_title"></unset>
+          <unset token="show_panel"></unset>
+        </condition>
+      </change>
+    </input>
+    <input type="text" token="s_owner" searchWhenChanged="true">
+      <label>Filter on owner:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_stanza" searchWhenChanged="true">
+      <label>Search for stanza:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_extractionname" searchWhenChanged="true">
+      <label>Search for field extraction name:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_value" searchWhenChanged="true">
+      <label>Search for value:</label>
+      <default>*</default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>About this dashboard</title>
+      <html>
+          <!--<h1>About this dashboard</h1>--> 
+        <p>This dashboard gives an overview over field extractions</p> 
+        <p>
+          <li>By default all field extractions for the search head you are logged into are displayed</li>
+          <li>Users may filter the results by either filling out the form or by clicking on a corresponding column value in the table below</li>
+        </p>
+      </html>
+    </panel>
+    <panel>
+      <title>No of field extractions</title>
+      <single>
+        <search base="baseSearch">
+          <query>| stats count</query>
+        </search>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Field extractions per application</title>
+      <table>
+        <title>Click on a cell to filter results</title>
+        <search base="baseSearch">
+          <query></query>
+        </search>
+        <option name="count">50</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <drilldown>
+          <condition field="Splunk app">
+            <set token="form.s_app">$row.Splunk app$</set>
+          </condition>
+          <condition field="Owner">
+            <set token="form.s_owner">$row.Owner$</set>
+          </condition>
+          <condition field="Stanza">
+            <set token="form.s_stanza">$row.Stanza$</set>
+          </condition>
+          <condition field="Field extraction name">
+            <set token="form.s_extractionname">$row.Field extraction name$</set>
+          </condition>
+          <condition field="Value">
+            <set token="form.s_value">$row.Value$</set>
+          </condition>
+          <condition field="Type">
+            <set token="form.s_type">$row.Type$</set>
+          </condition>
+          <condition field="Sharing">
+            <set token="form.s_sharing">$row.Sharing$</set>
+          </condition>
+          <condition field="*"></condition>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+</form>

@@ -1,0 +1,167 @@
+<form>
+  <label>Views</label>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="dropdown" token="s_app" searchWhenChanged="true">
+      <label>Filter on Splunk app:</label>
+      <choice value="*">All</choice>
+      <fieldForLabel>eai:acl.app</fieldForLabel>
+      <fieldForValue>eai:acl.app</fieldForValue>
+      <search>
+        <query>| rest splunk_server=local /servicesNS/-/-/data/ui/views | dedup eai:acl.app | sort eai:acl.app  | table eai:acl.app</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_view" searchWhenChanged="true">
+      <label>Search for view:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_owner" searchWhenChanged="true">
+      <label>Search for owner:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_content" searchWhenChanged="true">
+      <label>Search for content:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_navmenuappfolder" searchWhenChanged="true">
+      <label>Filter on navMenuAppFolder</label>
+      <default>*</default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>About this dashboard</title>
+      <html>
+          <!--<h1>About this dashboard</h1>--> 
+        <p>This dashboard gives an overview over views. You may search for a view name or contents of a view by using the filters above.
+        </p>
+      </html>
+    </panel>
+    <panel>
+      <title>No of views</title>
+      <single>
+        <search base="basesearch">
+          <query>| stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>List of views</title>
+      <table>
+        <title>Click on the column "View name" to go to the dashboard, click on navMenuAppFolder to view the navigation menu or click on any of the other columns to view the code</title>
+        <search id="basesearch">
+          <query>| rest splunk_server=local /servicesNS/-/-/data/ui/views 
+            | search (title=$s_view$ OR label=$s_view$) eai:acl.app=$s_app$ eai:data=$s_content$ eai:acl.owner=$s_owner$
+            | lookup splunkadmin_views_details.csv splunkApp as eai:acl.app, viewName as title output viewType
+            | fillnull value="NULL" viewType
+            | makemv viewType delim=","
+            | join type=left eai:acl.app [
+               | rest splunk_server=local /servicesNS/-/-/data/ui/nav
+               | fields eai:appName eai:acl.app eai:data disabled | rename eai:data as navMenu | fields eai:acl.app navMenu | nomv navMenu]
+               | eval inNavMenu=if(match(navMenu,title),"yes","no")
+            | fillnull value="-" inNavMenu
+            | join type=left title [
+                | rest splunk_server=local /servicesNS/-/-/data/ui/nav
+                | fields eai:appName eai:acl.app eai:data disabled
+                | rename eai:appName as appName, eai:acl.app as appFolder, eai:data as navMenu
+                | makemv navMenu
+                | mvexpand navMenu
+                | rex field=navMenu "name=\"(?&lt;title&gt;\S+)\""
+                | stats values(*) as * by title
+                | rename appFolder as navMenuAppFolder
+                | fields navMenuAppFolder title]
+            | fillnull value="-" navMenuAppFolder   
+            | makemv navMenuAppFolder
+            | search navMenuAppFolder="$s_navmenuappfolder$"   
+            | table eai:acl.app label title inNavMenu navMenuAppFolder navMenu viewType description eai:acl.owner eai:acl.perms* eai:acl.sharing eai:data  
+            | rename eai:acl.app as "Splunk app", title as "View name", eai:acl.owner as Owner, eai:data as Content, label as "View label", description as Description, eai:acl.perms.read as "Read priv", eai:acl.perms.write as "Write priv",eai:acl.sharing as Sharing, viewType as "View type"</query>
+          <earliest>@d</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">row</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color" field="navMenuAppFolder">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="Splunk app">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="View label">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="View type">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <fields>["View type","View label","View name","Description","Splunk app","inNavMenu","navMenuAppFolder","Owner","Read priv","Write priv","Sharing"]</fields>
+        <drilldown>
+          <condition field="View name">
+            <set token="s_app_name_drilldown">$row.Splunk app$</set>
+            <set token="s_dashboard_name">$row.View name$</set>
+            <link target="_blank">/app/$s_app_name_drilldown$/$s_dashboard_name$</link>
+          </condition>
+          <condition field="navMenuAppFolder">
+            <set token="s_nav_drilldown">$click.value2$</set>
+          </condition>
+          <condition field="*">
+            <set token="s_app_drilldown">$row.Splunk app$</set>
+            <set token="s_title_drilldown">$row.View name$</set>
+            <set token="s_owner_drilldown">$row.Owner$</set>
+            <unset token="s_nav_drilldown"></unset>
+          </condition>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel depends="$s_nav_drilldown$">
+      <title>Navmenu for app: $s_nav_drilldown$</title>
+      <table>
+        <search>
+          <query>
+            | rest splunk_server=local /servicesNS/-/-/data/ui/nav
+            | search eai:acl.app="$s_nav_drilldown$"
+            | fields eai:appName eai:acl.app eai:data disabled 
+            | rename eai:data as navMenu 
+            | fields eai:acl.app navMenu 
+          </query>
+        </search>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>App: $s_app_drilldown$, view name: $s_title_drilldown$</title>
+      <table>
+        <search>
+          <query>| rest splunk_server=local /servicesNS/-/-/data/ui/views 
+            | search eai:acl.app=$s_app_drilldown$ title="$s_title_drilldown$" eai:acl.owner="$s_owner_drilldown$"
+            | table eai:acl.app title eai:acl.owner eai:data
+            | rename eai:acl.app as "Splunk app", title as "View name", eai:acl.owner as Owner, eai:data as Content
+            | table Content</query>
+          <earliest>@d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+</form>

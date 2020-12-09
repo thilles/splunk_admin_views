@@ -1,0 +1,223 @@
+<form>
+  <label>Dashboard usage</label>
+  <search id="basesearch_dashboardusage">
+    <query>
+            index="_internal" ($s_searchhead$) user!="-" sourcetype=splunkd_ui_access  uri=*app/* user!="*$s_excludeuser$*"
+            | fields _time uri user
+            | fields - _raw
+            | rex field=uri "\w+-\w+/app/(?&lt;app&gt;[^/]+)/(?&lt;dashboard&gt;[^?/\s]+)" 
+            | search dashboard!="job_manager" dashboard!="search" dashboard!="home" dashboard!="alert" dashboard!="lookup_edit" dashboard!="@go" dashboard!="data_lab" dashboard!="dataset" dashboard!="datasets" dashboard!="alerts" dashboard!="dashboards" dashboard!="reports" dashboard!="report"
+            | eventstats dc(user) as #usersTotal, dc(app) as #appTotal, dc(dashboard) as #dashboardTotal
+            | bin _time span="$s_span$"
+            | stats count as #accessed, dc(user) as #users, max(#usersTotal) as #usersTotal, max(#appTotal) as #appTotal, max(#dashboardTotal) as #dashboardTotal, values(user) as user by _time,app,dashboard
+          </query>
+    <earliest>$s_time.earliest$</earliest>
+    <latest>$s_time.latest$</latest>
+    <sampleRatio>1</sampleRatio>
+  </search>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="s_time" searchWhenChanged="true">
+      <label>Choose time period:</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="dropdown" token="s_span" searchWhenChanged="true">
+      <label>Choose time span:</label>
+      <choice value="1h">1h</choice>
+      <choice value="1d">1d</choice>
+      <default>1h</default>
+    </input>
+    <input type="checkbox" token="s_searchhead" searchWhenChanged="true">
+      <label>Filter on search head:</label>
+      <valuePrefix>host="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>host</fieldForLabel>
+      <fieldForValue>host</fieldForValue>
+      <search>
+        <query>
+          | tstats count where index="_internal" sourcetype=splunkd_ui_access where host=* by host
+          | sort host DESC
+        </query>
+        <earliest>$s_time.earliest$</earliest>
+        <latest>$s_time.latest$</latest>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_excludeuser" searchWhenChanged="true">
+      <label>Exclude user:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_app" searchWhenChanged="true">
+      <label>Filter on app:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_dashboard" searchWhenChanged="true">
+      <label>Filter on dashboard:</label>
+      <default>*</default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <single>
+        <search base="basesearch_dashboardusage">
+          <query>
+            | dedup #appTotal
+            | fields #appTotal
+          </query>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x6B7783","0x6B7783"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="showSparkline">0</option>
+        <option name="showTrendIndicator">0</option>
+        <option name="underLabel">#apps - total</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <search base="basesearch_dashboardusage">
+          <query>
+            | search app="*$s_app$*" dashboard="*$s_dashboard$*"
+            | stats dc(app) as #apps
+          </query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="underLabel">#apps - filtered</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <search base="basesearch_dashboardusage">
+          <query>
+            | dedup #dashboardTotal
+            | fields #dashboardTotal
+          </query>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x6B7783","0x6B7783"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="showSparkline">0</option>
+        <option name="showTrendIndicator">0</option>
+        <option name="underLabel">#dashboards - total</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <search base="basesearch_dashboardusage">
+          <query>
+            | search app="*$s_app$*" dashboard="*$s_dashboard$*"
+            | stats dc(dashboard) as #dashboards
+          </query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="underLabel">#dashboards - filtered</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <search base="basesearch_dashboardusage">
+          <query>
+            | dedup #usersTotal
+            | fields #usersTotal
+          </query>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x6B7783","0x6B7783"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="showSparkline">0</option>
+        <option name="showTrendIndicator">0</option>
+        <option name="underLabel">#users - total</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <search base="basesearch_dashboardusage">
+          <query>| search app="*$s_app$*" dashboard="*$s_dashboard$*"
+| mvexpand user
+| stats dc(user) as #users</query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="underLabel">#users - filtered</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <chart>
+        <search base="basesearch_dashboardusage">
+          <query>
+            | search app="*$s_app$*" dashboard="*$s_dashboard$*"
+            | timechart sum(#accessed) as #accessed</query>
+        </search>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.visibility">collapsed</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Top app</title>
+      <table>
+        <search base="basesearch_dashboardusage">
+          <query>
+            | search app="*$s_app$*" dashboard="*$s_dashboard$*"
+            | stats sum(#accessed) as #accessed, dc(user) as #users by app
+            | sort #users DESC</query>
+        </search>
+        <option name="count">5</option>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Top dashboard</title>
+      <table>
+        <search base="basesearch_dashboardusage">
+          <query>
+            | search app="*$s_app$*" dashboard="*$s_dashboard$*"
+            | stats sum(#accessed) as #accessed, dc(user) as #users by dashboard
+            | sort #users DESC</query>
+        </search>
+        <option name="count">5</option>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <search base="basesearch_dashboardusage">
+          <query>
+            | search app="*$s_app$*" dashboard="*$s_dashboard$*"
+            | fields - user, #usersTotal, #appTotal, #dashboardTotal</query>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

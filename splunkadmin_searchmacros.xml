@@ -1,0 +1,58 @@
+<form>
+  <label>Search macros</label>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="dropdown" token="s_app" searchWhenChanged="true">
+      <label>Filter on app:</label>
+      <choice value="*">All</choice>
+      <fieldForLabel>eai:acl.app</fieldForLabel>
+      <fieldForValue>eai:acl.app</fieldForValue>
+      <search>
+        <query>| rest splunk_server=local /servicesNS/-/-/data/ui/views | dedup eai:acl.app | sort eai:acl.app  | table eai:acl.app</query>
+        <earliest>-4h@m</earliest>
+        <latest>now</latest>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_macro" searchWhenChanged="true">
+      <label>Search for macro:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_definition" searchWhenChanged="true">
+      <label>Search in definition:</label>
+      <default>*</default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <table>
+        <search>
+          <query>| rest /servicesNS/-/-/admin/macros  
+ | rex field=definition max_match=0 "\`(?&lt;themacros&gt;[^\`\(]*)[\`\(]" 
+ | rex field=id "(?&lt;title&gt;[^\/]*)$"
+ | sort  eai:acl.app
+ | rename eai:acl.app as app, title as macroName
+ | search app=$s_app$ macroName=*$s_macro$* definition=*$s_definition$*
+ | table app macroName them* args definition eai:acl.perms.read eai:acl.perms.write eai:acl.sharing author</query>
+          <earliest>-90d@d</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color" field="eai:acl.sharing">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="app">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+</form>

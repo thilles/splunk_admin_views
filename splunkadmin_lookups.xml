@@ -1,0 +1,154 @@
+<form>
+  <label>Lookups</label>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="dropdown" token="s_splunkapp" searchWhenChanged="true">
+      <label>Filter on splunkApp:</label>
+      <default>*</default>
+      <change>
+        <condition>
+          <unset token="show_table_lookupfile"></unset>
+          <unset token="show_table_kvstore"></unset>
+        </condition>
+      </change>
+      <fieldForLabel>label</fieldForLabel>
+      <fieldForValue>SplunkApp</fieldForValue>
+      <search>
+        <query>
+          | rest/servicesNS/-/-/data/lookup-table-files | dedup eai:acl.app | rename eai:acl.app as SplunkApp 
+          | join type=outer SplunkApp [| rest /services/apps/local | table label title | dedup label title | rename title as SplunkApp]
+          | table label SplunkApp | sort label SplunkApp
+        </query>
+      </search>
+      <choice value="*">All</choice>
+      <prefix>eai:acl.app="</prefix>
+      <suffix>"</suffix>
+    </input>
+    <input type="text" token="s_splunkapp2" searchWhenChanged="true">
+      <label>Search for splunkApp:</label>
+      <default>*</default>
+      <prefix>splunkApp="*</prefix>
+      <suffix>*"</suffix>
+      <change>
+        <condition>
+          <set token="form.s_splunkapp">*</set>
+          <unset token="show_table_lookupfile"></unset>
+          <unset token="show_table_kvstore"></unset>
+        </condition>
+      </change>
+    </input>
+    <input type="text" token="s_lookupfile2" searchWhenChanged="true">
+      <label>Search for lookupFile:</label>
+      <default>*</default>
+      <prefix>title="*</prefix>
+      <suffix>*"</suffix>
+      <change>
+        <condition>
+          <unset token="show_table_lookupfile"></unset>
+          <unset token="show_table_kvstore"></unset>
+        </condition>
+      </change>
+    </input>
+    <input type="multiselect" token="s_lookuptype" searchWhenChanged="true">
+      <label>Filter on lookupType:</label>
+      <choice value="lookupfile">Lookup file</choice>
+      <choice value="kvstore">KV store</choice>
+      <valuePrefix>lookupType="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <default>lookupfile,kvstore</default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>About this dashboard</title>
+      <html>
+      <p>  
+      This dashboard gives an overview over available lookups per Splunk app. Users may narrow the result by making choices in the form on Splunk apps, lookup types (csv file or kvstore) or a special lookup. Click on a row in the table below to view the contents of the chosen lookup.
+      </p>
+      </html>
+    </panel>
+    <panel>
+      <title>No of lookups</title>
+      <single>
+        <search base="baseSearch">
+          <query>stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>List of lookup files per Splunk app</title>
+      <table id="toolTipLookupFile">
+        <search id="baseSearch">
+          <query>
+            | rest/servicesNS/-/-/data/lookup-table-files
+            | fields eai:acl.app, title, *perms* *sharing* *owner*
+`comment("ADD LOOKUPS AND KVSTORES TO THE RESULT")` 
+            | eval lookupType_file="lookupfile"
+            | append [| rest/servicesNS/-/-/storage/collections/config | eval lookupType_kvstore="kvstore"]
+            | fields eai:acl.app, title, lookup*, *perms* *sharing* *owner*
+`comment("FIND SPLUNK APP LABEL USING JOIN ON SPLUNK APP FOLDER")`
+            | join type=outer eai:acl.app [| rest /services/apps/local | table label title | dedup label title | rename title as eai:acl.app, label as "splunkApp"]
+            | eval lookupType=mvappend(lookupType_kvstore,lookupType_file)
+`comment("FILTER THE RESULTS ON SPLUNK APP LABEL, LOOKUP TYPE OR NAME OF LOOKUP")`
+            | search $s_splunkapp$ $s_splunkapp2$ $s_lookupfile2$ $s_lookuptype$
+            | dedup eai:acl.app title 
+            | rename eai:acl.app as splunkFolder, title as lookupName, eai:acl.perms.read as readPrivs, eai:acl.perms.write as writePrivs, 
+            eai:acl.sharing as sharingPrivs, eai:acl.owner as author        
+            | sort splunkApp
+            
+          </query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <fields>["splunkApp","splunkFolder","lookupType","lookupName","author","readPrivs","writePrivs","sharingPrivs"]</fields>
+        <option name="count">10</option>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">progressbar</option>
+        <drilldown>
+          <set token="s_lookupfile">$row.lookupName$</set>
+          <set token="s_splunkapp_drilldown">$row.splunkFolder$</set>
+          <set token="s_lookupType_drilldown">$row.lookupType$</set>
+          <eval token="show_table_kvstore">case($s_lookupType_drilldown$=="kvstore","true")</eval>
+          <eval token="show_table_lookupfile">case($s_lookupType_drilldown$=="lookupfile","true")</eval>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel depends="$show_table_lookupfile$">
+      <title>$s_lookupType_drilldown$: "$s_lookupfile$"</title>
+      <input type="text" token="s_freesearch_lookup" searchWhenChanged="true">
+        <label>Search using field=*keyword*:</label>
+        <default>*</default>
+      </input>
+      <table>
+        <search>
+          <query>| inputlookup $s_lookupfile$ | search $s_freesearch_lookup$</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel depends="$show_table_kvstore$">
+      <title>$s_lookupType_drilldown$: "$s_lookupfile$"</title>
+      <input type="text" token="s_freesearch_lookup" searchWhenChanged="true">
+        <label>Search using field=*keyword*:</label>
+        <default>*</default>
+      </input>
+      <table>
+        <search>
+          <query>| inputlookup $s_lookupfile$ | tail 50000 | search $s_freesearch_lookup$</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+</form>

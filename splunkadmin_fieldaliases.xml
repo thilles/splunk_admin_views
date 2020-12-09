@@ -1,0 +1,93 @@
+<form>
+  <label>Field aliases</label>
+  <search id="basesearch_fieldaliases">
+    <query>
+      |rest /services/data/props/fieldaliases 
+      | fields eai:acl.app value title eai:acl.owner stanza eai:acl.sharing splunk_server
+      | dedup eai:acl.app title
+      | search eai:acl.app=$s_app$ value="$s_fieldalias$" title="$s_name$" stanza="$s_stanza$"
+      | rename title as Name, value as "Field alias", eai:acl.app as "Splunk app", eai:acl.owner as Owner, stanza as Stanza, eai:acl.sharing as Sharing 
+      | table "Splunk app" Stanza Name "Field alias" Owner Sharing
+    </query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+  </search>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="dropdown" token="s_app" searchWhenChanged="true">
+      <label>Choose Splunk apps:</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>eai:acl.app</fieldForLabel>
+      <fieldForValue>eai:acl.app</fieldForValue>
+      <search>
+        <query>| rest splunk_server=local /servicesNS/-/-/data/ui/views | dedup eai:acl.app | sort eai:acl.app  | table eai:acl.app</query>
+      </search>
+    </input>
+    <input type="text" token="s_stanza" searchWhenChanged="true">
+      <label>Search for stanza:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_name" searchWhenChanged="true">
+      <label>Search for name:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_fieldalias" searchWhenChanged="true">
+      <label>Search for field alias:</label>
+      <default>*</default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>About this dashboard</title>
+      <html>
+          <!--<h1>About this dashboard</h1>--> 
+        <p>This dashboard gives an overview over field aliases stored in props.conf.</p> 
+        <p>
+          
+          <li>Users may filter the results by either filling out the form or by clicking on a corresponding column value in the table below</li>
+        </p>
+      </html>
+    </panel>
+    <panel>
+      <single>
+        <search base="basesearch_fieldaliases">
+          <query>| stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="underLabel">No of field aliases</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <search base="basesearch_fieldaliases">
+          <query/>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <drilldown>
+          <condition field="Splunk app">
+            <set token="form.s_app">$row.Splunk app$</set>
+          </condition>
+          <condition field="Name">
+            <set token="form.s_name">$row.Name$</set>
+          </condition>
+          <condition field="Field alias">
+            <set token="form.s_fieldalias">$row.Field alias$</set>
+          </condition>
+          <condition field="Stanza">
+            <set token="form.s_stanza">$row.Stanza$</set>
+          </condition>
+          <condition field="*"></condition>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+</form>

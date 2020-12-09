@@ -1,0 +1,238 @@
+<form>
+  <label>Saved searches</label>
+  <search id="baseSearch">
+    <query>| rest /servicesNS/-/-/saved/searches splunk_server=local
+`comment("DO A JOIN ON APP FOLDER NAME TO OBTAIN APP NAME")`
+            | join type=outer eai:acl.app [| rest /services/apps/local | table label title | dedup label title | rename title as eai:acl.app, label as "Splunk App"]
+            | eval "Edit search"="Edit search" 
+            | eval "Run search"="Run search"
+`comment("FILTER THE RESULTS BASED ON FORM INPUT")`            
+            | search disabled=$s_disabled$ $s_shared$ $s_scheduled$ $s_actions$ eai:acl.owner=$s_owner$  eai:acl.app=$s_app2$ "Splunk App"="*$s_app$*" description=$s_description$ search="$s_searchcontent$" dispatch.earliest_time=$s_earliesttime$ dispatchAs="$s_dispatch$"
+            | eval "Alert condition"=mvappend(alert_comparator, " ", alert_threshold) 
+            | rename "action.email.subject" as "email_subject1", "action.email.subject.alert" as "email_subject2" 
+            | fillnull value=- 
+            | fillnull value=- next_scheduled_time 
+            | eval "email_subject"=email_subject1 + email_subject2 
+            | eval email_subject=tostring(email_subject) 
+            | table "Edit search", "Run search", "Splunk App", eai:acl.app, title, description, updated, search, disabled, splunk_server,  dispatchAs, eai:acl.sharing, eai:acl.owner, eai:acl.perms.read, eai:acl.perms.write, triggered_alert_count, cron_schedule, next_scheduled_time,
+ "Alert condition", alert_type, dispatch.earliest_time, alert.digest_mode, actions, action.lookup.filename, action.snow_event.param.node, action.snow_event.param.type, action.snow_event.param.resource, action.snow_event.param.severity, action.snow_event.param.description, action.summary_index._name, action.script.filename, action.email.to, action.email.cc, email_subject, action.email.message.alert, action.email.inline
+`comment("CREATE field savedSearchName WHICH IS A REGEX VERSION OF title")` 
+            | eval savedSearchName=title
+`comment("ESCAPE BACKSLASH FROM field savedSearchName")`
+            | rex field=savedSearchName mode=sed "s/(\\\)/\1\1/g"
+`comment("ESCAPE DOUBLEQOUTE FROM field savedSearchName")`
+            | rex field=savedSearchName mode=sed "s/\"/\\\"/g"
+            | rex field=savedSearchName mode=sed "s/-/*/g"
+            | rename title as "Saved search name", splunk_server as "Splunk server", updated as "Last update", actions as Actions, action.snow_event.param.node as snow_event.Node, action.snow_event.param.type as snow_event.Type, action.snow_event.param.resource as snow_event.Resource, action.snow_event.param.severity as snow_event.Severity, action.snow_event.param.description as snow_event.Description, action.summary_index._name as "Summary index name", description as Description, search as Search, eai:acl.app as "App context", eai:acl.sharing as "Shared",
+              eai:acl.owner as "Owner", eai:acl.perms.read as "Read priv", eai:acl.perms.write as "Write priv", action.email.to as "E-mail to", action.email.cc as "E-mail cc", triggered_alert_count as "No of triggered alerts", cron_schedule as "Schedule", 
+              next_scheduled_time as "Next scheduled time", alert_threshold as "Threshold", dispatch.earliest_time as "Earliest time", alert_condition as "Custom condition", alert_type as "Alert type", email_subject as "Email subject", disabled as Disabled, action.script.filename as "Action script filename", action.email.message.alert as "Email message content", action.email.inline as "Email results inline", action.lookup.filename as "Lookupfile"    
+            | sort  "Splunk App" "Saved search name"
+      </query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+  </search>
+  <fieldset autoRun="true" submitButton="false">
+    <input type="dropdown" token="s_app2" searchWhenChanged="true">
+      <label>Choose Splunk app:</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <change>
+        <condition>
+          <unset token="form.s_title"></unset>
+          <unset token="show_panel"></unset>
+          <unset token="form.s_app"></unset>
+        </condition>
+      </change>
+      <fieldForLabel>label</fieldForLabel>
+      <fieldForValue>title</fieldForValue>
+      <search>
+        <query>| rest /services/apps/local | table label title | dedup label title | sort label</query>
+      </search>
+    </input>
+    <input type="text" token="s_app" searchWhenChanged="true">
+      <label>Search for app:</label>
+      <default>*</default>
+      <change>
+        <condition>
+          <unset token="form.s_title"></unset>
+          <unset token="show_panel"></unset>
+        </condition>
+      </change>
+    </input>
+    <input type="text" token="s_title" searchWhenChanged="true">
+      <label>Search for saved search (use *):</label>
+      <default>*</default>
+      <prefix>"</prefix>
+      <suffix>"</suffix>
+    </input>
+    <input type="text" token="s_description" searchWhenChanged="true">
+      <label>Search for description:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_searchcontent" searchWhenChanged="true">
+      <label>Search for content in search (use *):</label>
+      <default>*</default>
+    </input>
+    <input type="dropdown" token="s_disabled" searchWhenChanged="true">
+      <label>Choose enabled/disabled searches:</label>
+      <choice value="*">All</choice>
+      <choice value="0">Enabled</choice>
+      <choice value="1">Disabled</choice>
+      <default>0</default>
+      <change>
+        <condition>
+          <unset token="form.s_title"></unset>
+          <unset token="show_panel"></unset>
+        </condition>
+      </change>
+    </input>
+    <input type="text" token="s_owner" searchWhenChanged="true">
+      <label>Search for owner:</label>
+      <default>*</default>
+      <change>
+        <condition>
+          <unset token="form.s_title"></unset>
+          <unset token="show_panel"></unset>
+        </condition>
+      </change>
+    </input>
+    <input type="checkbox" token="s_shared" searchWhenChanged="true">
+      <label>Shared context:</label>
+      <default>*</default>
+      <choice value="*">All</choice>
+      <choice value="user">Private</choice>
+      <choice value="app">App</choice>
+      <choice value="global">Global</choice>
+      <delimiter> OR </delimiter>
+      <valuePrefix>eai:acl.sharing=</valuePrefix>
+      <change>
+        <condition>
+          <unset token="form.s_title"></unset>
+          <unset token="show_panel"></unset>
+        </condition>
+      </change>
+    </input>
+    <input type="dropdown" token="s_scheduled" searchWhenChanged="true">
+      <label>Scheduled/non scheduled searches:</label>
+      <default>*</default>
+      <choice value="*">All</choice>
+      <choice value="1">Scheduled</choice>
+      <choice value="0">Non-scheduled</choice>
+      <prefix>is_scheduled=</prefix>
+      <change>
+        <condition>
+          <unset token="form.s_title"></unset>
+          <unset token="show_panel"></unset>
+        </condition>
+      </change>
+    </input>
+    <input type="dropdown" token="s_actions" searchWhenChanged="true">
+      <label>Saved searches actions:</label>
+      <choice value="*">All</choice>
+      <choice value="*summary_index*">Summary index</choice>
+      <choice value="*email*">Email</choice>
+      <choice value="*script*">Script</choice>
+      <choice value="*alert_manager*">Alert manager</choice>
+      <choice value="snow_event">Service Now</choice>
+      <choice value="lookup">Lookups</choice>
+      <prefix>actions=</prefix>
+      <default>*</default>
+      <change>
+        <condition>
+          <unset token="form.s_title"></unset>
+          <unset token="show_panel"></unset>
+        </condition>
+      </change>
+    </input>
+    <input type="radio" token="s_earliesttime" searchWhenChanged="true">
+      <label>Search for earliest time:</label>
+      <choice value="*">All</choice>
+      <choice value="*rt*">Real-time searches</choice>
+      <default>*</default>
+    </input>
+    <input type="dropdown" token="s_dispatch" searchWhenChanged="true">
+      <label>Dispatch as owner:</label>
+      <default>*</default>
+      <choice value="*">No filter</choice>
+      <choice value="owner">Owner</choice>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>About this dashboard</title>
+      <html>
+          <!--<h1>About this dashboard</h1>--> 
+        <p>This dashboard gives an overview over saved searches showing alert conditions, schedule, privilegies, the search itself, whether the search is private or shared in an app.</p> 
+        <p>
+          <li>By default all saved searches for the search head you are logged into are displayed</li>
+          <li>By default only the enabled saved searches are displayed, but you can choose to look at disabled ones as well</li>
+          <li>The "Description field comes from the definition of the search"</li>
+        </p>
+      </html>
+    </panel>
+    <panel>
+      <single>
+        <search base="baseSearch">
+          <query>stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="underLabel">No of saved searches</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Saved searches per application</title>
+      <table>
+        <title>Click on a row in order to get more details about a search</title>
+        <search base="baseSearch">
+          <query>search "Saved search name"="*$form.s_title$*"
+            | eval Status=case(
+               Disabled=0,"Enabled",
+               Disabled=1,"Disabled")
+            | table "Splunk App", "App context", "Saved search name", savedSearchName, Description,  Status</query>
+        </search>
+        <option name="count">20</option>
+        <option name="drilldown">cell</option>
+        <fields>["Splunk App","Saved search name","Description","Status"]</fields>
+        <drilldown>
+          <set token="s_title">$row.Saved search name$</set>
+          <set token="s_titledrilldown">$row.savedSearchName$</set>
+          <set token="show_panel">true</set>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table id="detail" depends="$s_title$,$show_panel$">
+        <title>Saved searches details</title>
+        <search base="baseSearch">
+          <query>search "Saved search name"="$s_titledrilldown$" 
+            | convert auto(alert.digest_mode) as alertMode
+            | eval alertMode=case(
+              alertMode == 1,"Entire result set",
+              alertMode == 0,"Individual result",
+              1==1,"Unknown")
+            | eval alert.digest_mode=alertMode
+            | rename alert.digest_mode as "Alert mode"
+            | fields - Description,savedSearchName, Disabled, alertMode</query>
+        </search>
+        <option name="count">25</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="rowNumbers">true</option>
+        <option name="wrap">true</option>
+        <drilldown target="_blank">
+          <condition field="Edit search">
+            <link>/manager/$row.App context$/saved/searches/$row.Saved search name$?action=edit</link>
+          </condition>
+          <condition field="Run search">
+            <link>/app/$row.App context$/search?q=search%20$row.Search$</link>
+          </condition>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+</form>

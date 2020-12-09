@@ -1,0 +1,59 @@
+<form>
+  <label>Eventtypes</label>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="dropdown" token="s_app" searchWhenChanged="true">
+      <label>Choose Splunk App:</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForLabel>eai:acl.app</fieldForLabel>
+      <fieldForValue>eai:acl.app</fieldForValue>
+      <search>
+        <query>| rest splunk_server=local /servicesNS/-/-/data/ui/views | dedup eai:acl.app | sort eai:acl.app  | table eai:acl.app</query>
+      </search>
+    </input>
+    <input type="text" token="s_name" searchWhenChanged="true">
+      <label>Filter on name:</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="s_search" searchWhenChanged="true">
+      <label>Filter on search:</label>
+      <default>*</default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <table>
+        <search>
+          <query>| rest /servicesNS/-/-/configs/conf-eventtypes 
+| search eai:acl.app=$s_app$ search="$s_search$" title="$s_name$" 
+| rename eai:acl.app as "Splunk app", title as Name, search as Search, eai:acl.owner as Owner, eai:acl.sharing as Sharing 
+| eval Status=if(disabled=0,"enabled","disabled") 
+| table "Splunk app" Name Search Owner Sharing Status</query>
+          <earliest>-90d@d</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <drilldown>
+          <condition field="Splunk app">
+            <set token="form.s_app">$row.Splunk app$</set>
+          </condition>
+          <condition field="Name">
+            <set token="form.s_name">$row.Name$</set>
+          </condition>
+          <condition field="Search">
+            <set token="form.s_search">$row.Search$</set>
+          </condition>
+          <condition field="*"></condition>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+</form>
