@@ -1,0 +1,139 @@
+<form>
+  <label>CIM validator</label>
+  <description>Dashboard for validating data normalization</description>
+  <fieldset submitButton="false" autoRun="false">
+    <input type="text" token="token_search" searchWhenChanged="true">
+      <label>search</label>
+    </input>
+    <input type="time" token="token_time" searchWhenChanged="true">
+      <label>Time</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="dropdown" token="datamodel" searchWhenChanged="false">
+      <label>datamodel</label>
+      <fieldForLabel>datamodel</fieldForLabel>
+      <fieldForValue>datamodel</fieldForValue>
+      <search>
+        <query>| datamodelsimple type=models</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+    <input type="dropdown" token="object" searchWhenChanged="true">
+      <label>object</label>
+      <fieldForLabel>object</fieldForLabel>
+      <fieldForValue>object</fieldForValue>
+      <search>
+        <query>| datamodelsimple datamodel=$datamodel$ type=objects</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+    <input type="text" token="event_amount" searchWhenChanged="true">
+      <label>event amount</label>
+      <default>1000</default>
+      <initialValue>1000</initialValue>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>KPI: Recommended fields</title>
+      <single>
+        <title>Percentage of recommended fields that are covered</title>
+        <search base="basesearch">
+          <query>| where recommended=="true"
+| stats avg(percent_coverage) as kpi_recommended_fields</query>
+        </search>
+        <option name="colorMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0xf1813f","0xf8be34","0x53a051"]</option>
+        <option name="rangeValues">[0,70]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="unit">%</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>KPI: All fields</title>
+      <single>
+        <title>Percentage of all fields that are covered</title>
+        <search base="basesearch">
+          <query>| stats avg(percent_coverage) as kpi_recommended_fields</query>
+        </search>
+        <option name="colorMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0xf1813f","0xf8be34","0x53a051"]</option>
+        <option name="rangeValues">[0,70]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="unit">%</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Search: $token_search$</title>
+      <table>
+        <search id="basesearch">
+          <query>| datamodel $datamodel$ $object$
+```Finding CIM fields and descriptions```
+| spath output=calcs path=calculations{} 
+| spath output=fields path=fields{} 
+| eval outfields=mvappend(fields,NULL,calcs) 
+| mvexpand outfields 
+| spath output=fields input=outfields path=outputFields{} 
+| eval fields=if(isnull(fields),outfields,fields) 
+| mvexpand fields 
+| spath output=field input=fields path=fieldName 
+| spath output=recommended input=fields path=comment.recommended 
+| spath output=description input=fields path=comment.description
+| spath output=ta_relevant input=fields path=comment.ta_relevant
+| spath output=field_type input=fields path=type
+| table field, recommended, description, field_type, ta_relevant
+| where isnull(ta_relevant) AND isnotnull(description)
+| fields - ta_relevant
+| sort field
+```Joining actual data to the CIM fields```
+| join type=outer field
+[ search $token_search$ | head $event_amount$ | fieldsummary maxvals=3 | eventstats max(count) AS total | eval percent_coverage=round(count/total*100, 2) | table field, percent_coverage, distinct_count, total, values]
+| spath input=values
+| rename {}.value AS sample_values {}.count AS sample_count distinct_count AS distinct_value_count total AS total_events
+| fillnull value=0 percent_coverage, distinct_value_count, total_events
+| fields - values</query>
+          <earliest>$token_time.earliest$</earliest>
+          <latest>$token_time.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">50</option>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">true</option>
+        <option name="wrap">true</option>
+        <format type="color" field="recommended">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="percent_coverage">
+          <colorPalette type="minMidMax" maxColor="#53A051" minColor="#FFFFFF"></colorPalette>
+          <scale type="minMidMax"></scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Example events</title>
+      <event>
+        <search>
+          <query>$token_search$ | head 10</query>
+          <earliest>$token_time.earliest$</earliest>
+          <latest>$token_time.latest$</latest>
+        </search>
+        <option name="list.drilldown">none</option>
+      </event>
+    </panel>
+  </row>
+</form>
